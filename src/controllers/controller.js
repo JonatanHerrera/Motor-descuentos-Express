@@ -3,7 +3,8 @@ const {
   _getGoogleSheetClient,
 } = require("../spreadsheets.js");
 
-let discountsList = [];
+let brandDiscountsList = [];
+let clientDiscountList = [];
 let activeBrand = "";
 
 const bcrypt = require("bcrypt");
@@ -65,16 +66,28 @@ async function Login(marca, password) {
   if (isSecureCredentialsValid) {
     console.log("Las credenciales son válidas");
     activeBrand = marca;
-    return true;
+    return {
+      status: "Log In",
+      result: true,
+    };
   } else {
     console.log("Las credenciales son inválidas");
     activeBrand = "";
-    return false;
+    return {
+      status: "Error",
+      result: false,
+    };
     // Realizar acciones cuando las credenciales son inválidas
   }
 }
 
-async function getDiscounts(googleSheetClient, sheetId, tabName, range, brand) {
+async function getDiscounts(
+  googleSheetClient,
+  sheetId,
+  tabName,
+  range,
+  filter
+) {
   try {
     const res = await googleSheetClient.spreadsheets.values.get({
       spreadsheetId: sheetId,
@@ -85,19 +98,17 @@ async function getDiscounts(googleSheetClient, sheetId, tabName, range, brand) {
       const data = res.data.values;
 
       // Filtrar todas las filas que corresponden a la marca específica
-      const discounts = data.filter((row) => row[0] === brand);
-
+      const discounts = data.filter((row) => row[0] === filter);
       if (discounts.length > 0) {
         // Estructurar los datos para devolver los descuentos encontrados
         const discountsData = discounts.map((discount) => {
           return {
-            brand: discount[0], // Suponiendo que la columna 1 es la marca
-            discountAmount: discount[1], // Suponiendo que la columna 2 es el descuento
+            object: discount[0], // Suponiendo que la columna 1 es la marca
+            discount: discount[1], // Suponiendo que la columna 2 es el descuento
             // Puedes agregar más propiedades según las columnas de tu hoja de Google Sheets
           };
         });
 
-        discountsList = discountsData;
         return discountsData;
       } else {
         return []; // No se encontraron descuentos para la marca especificada
@@ -111,6 +122,54 @@ async function getDiscounts(googleSheetClient, sheetId, tabName, range, brand) {
   }
 }
 
+async function getDiscountByClientDocument(client, brand) {
+  const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
+  const range = "A:B";
+  const googleSheetClient = await _getGoogleSheetClient();
+
+  brandDiscountsList = await getDiscountByBrand(brand);
+  clientDiscountList = await getDiscountByClient(client);
+  const validatedFilter = filterDiscounts(
+    brandDiscountsList,
+    clientDiscountList
+  );
+  return validatedFilter;
+}
+
+function filterDiscounts(arr1, arr2) {
+  const result = [];
+
+  for (const item1 of arr1) {
+    for (const item2 of arr2) {
+      if (item1.discount === item2.discount) {
+        result.push(item1.discount);
+      }
+    }
+  }
+
+  return result;
+}
+
+async function getDiscountByClient(client) {
+  // Lógica para obtener los usuarios desde tu base de datos u origen de datos
+  // Por ejemplo:
+  // const usuarios = ...; // Obtener usuarios desde alguna fuente de datos
+  const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
+  const tabName = "Clientes";
+  const range = "A:B";
+  const googleSheetClient = await _getGoogleSheetClient();
+
+  let discountsList = await getDiscounts(
+    googleSheetClient,
+    sheetId,
+    tabName,
+    range,
+    client
+  );
+
+  return discountsList;
+}
+
 async function getDiscountByBrand(brand) {
   // Lógica para obtener los usuarios desde tu base de datos u origen de datos
   // Por ejemplo:
@@ -120,9 +179,25 @@ async function getDiscountByBrand(brand) {
   const range = "A:B";
   const googleSheetClient = await _getGoogleSheetClient();
 
-  getDiscounts(googleSheetClient, sheetId, tabName, range, brand);
+  let discountsList = await getDiscounts(
+    googleSheetClient,
+    sheetId,
+    tabName,
+    range,
+    brand
+  );
 
-  console.log(discountsList);
+  return discountsList;
 }
 
-module.exports = { Login, getDiscountByBrand };
+function getActiveBrand(req, res) {
+  res.json(activeBrand);
+}
+
+module.exports = {
+  Login,
+  getDiscountByBrand,
+  getActiveBrand,
+  getDiscountByClientDocument,
+  getDiscountByClient
+};

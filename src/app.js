@@ -1,6 +1,6 @@
 var express = require("express"); //llamamos a Express
 var app = express();
-const { Login, getDiscountByBrand } = require("./controllers/controller.js");
+const { Login, getDiscountByBrand, getActiveBrand ,getDiscountByClientDocument,getDiscountByClient} = require("./controllers/controller.js");
 const { get } = require("express/lib/request.js");
 
 // Ruta para obtener marcas
@@ -14,14 +14,28 @@ app.post("/login", async (req, res) => {
 
 
 app.post("/discountsByBrand", async (req, res) => {  
-  const { marca} = req.body;
+  const { brand} = req.body;
   const result = await getDiscountByBrand(marca);
   // Envías la respuesta de vuelta al cliente (Postman)
   res.json(result);
 });
-// Ruta para obtener usuarios
-app.get("/getDiscountByBrand", getDiscountByBrand);
+app.post("/discountsByClientDocument", async (req, res) => {  
+  const {client} = req.body;
+  const {brand} = req.body;
+  const result = await getDiscountByClientDocument(client,brand);
+  // Envías la respuesta de vuelta al cliente (Postman)
+  res.json(result);
+});
 
+app.post("/discountsByClient", async (req, res) => {  
+  const {client} = req.body;  
+  const result = await getDiscountByClient(client);
+  // Envías la respuesta de vuelta al cliente (Postman)
+  res.json(result);
+});
+// Ruta para obtener usuarios
+
+app.get("/getActiveBrand", getActiveBrand);
 //routes/
 app.use(require("./routes/google.routes"));
 
