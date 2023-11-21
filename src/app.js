@@ -1,5 +1,17 @@
 var express = require("express"); //llamamos a Express
+const cors = require('cors');
 var app = express();
+
+
+const corsOptions = {
+  origin: 'http://localhost:3000',
+  optionsSuccessStatus: 200 // some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+app.use(cors(corsOptions));
+
+
+
 const {
   Login,
   getDiscountByBrand,
@@ -53,9 +65,9 @@ app.post("/discountsByBrand", async (req, res) => {
   res.json(result);
 });
 app.post("/discountsByClientDocument", async (req, res) => {
-  const { client } = req.body;
-  const { brand } = req.body;
-  const result = await getDiscountByClientDocument(client, brand);
+  const { client, brand,  token } = req.body; 
+  
+  const result = await getDiscountByClientDocument(client,brand,token);
   // Envías la respuesta de vuelta al cliente (Postman)
   res.json(result);
 });

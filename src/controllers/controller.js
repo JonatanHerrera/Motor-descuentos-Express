@@ -31,13 +31,15 @@ async function validateSecureCredentials(
     if (found) {
       // Obtener el hash de la contraseña almacenada
       const hashedPassword = found[1]; // Suponiendo que la contraseña está en la segunda columna
+      const token = found[2];
 
       // Comparar la contraseña proporcionada con el hash almacenado de manera segura
       const match = await bcrypt.compare(password, hashedPassword);
-
-      return match;
+      if (match) {
+        return token;
+      }
     } else {
-      return false; // La marca no fue encontrada
+      return ""; // La marca no fue encontrada
     }
   } else {
     console.log("No se encontraron datos válidos en la hoja de Google Sheets");
@@ -51,7 +53,7 @@ async function Login(marca, password) {
   // const marcas = ...; // Obtener marcas desde alguna fuente de datos
   const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
   const tabName = "Marcas";
-  const range = "A:B";
+  const range = "A:C";
   const googleSheetClient = await _getGoogleSheetClient();
 
   const isSecureCredentialsValid = await validateSecureCredentials(
@@ -64,17 +66,19 @@ async function Login(marca, password) {
   );
 
   if (isSecureCredentialsValid) {
-    console.log("Las credenciales son válidas");
     activeBrand = marca;
     return {
+      marca: activeBrand,
       status: "Log In",
+      token: isSecureCredentialsValid,
       result: true,
     };
   } else {
-    console.log("Las credenciales son inválidas");
     activeBrand = "";
     return {
+      marca: activeBrand,
       status: "Error",
+      token: "",
       result: false,
     };
     // Realizar acciones cuando las credenciales son inválidas
@@ -122,11 +126,14 @@ async function getDiscounts(
   }
 }
 
-async function getDiscountByClientDocument(client, brand) {
+async function getDiscountByClientDocument(client, brand, token) {
   const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
   const range = "A:B";
   const googleSheetClient = await _getGoogleSheetClient();
-
+  const decodedData = Buffer.from(token, "base64").toString("utf-8");
+  if (decodedData !== "Descuentos:Descuentos123") {
+    return ["Invalid Token"];
+  }
   brandDiscountsList = await getDiscountByBrand(brand);
   clientDiscountList = await getDiscountByClient(client);
   const validatedFilter = filterDiscounts(
@@ -199,5 +206,5 @@ module.exports = {
   getDiscountByBrand,
   getActiveBrand,
   getDiscountByClientDocument,
-  getDiscountByClient
+  getDiscountByClient,
 };
