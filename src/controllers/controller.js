@@ -51,8 +51,10 @@ async function Login(marca, password) {
   // Lógica para obtener las marcas desde tu base de datos u origen de datos
   // Por ejemplo:
   // const marcas = ...; // Obtener marcas desde alguna fuente de datos
-  const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
-  const tabName = "Marcas";
+ 
+
+  const sheetId = process.env.SHEET_ID;
+  const tabName = process.env.TAB_NAME_BRAND;;
   const range = "A:C";
   const googleSheetClient = await _getGoogleSheetClient();
 
@@ -127,11 +129,11 @@ async function getDiscounts(
 }
 
 async function getDiscountByClientDocument(client, brand, token) {
-  const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
-  const range = "A:B";
+  
+  
   const googleSheetClient = await _getGoogleSheetClient();
   const decodedData = Buffer.from(token, "base64").toString("utf-8");
-  if (decodedData !== "Descuentos:Descuentos123") {
+  if (decodedData !== process.env.AUTH_API) {
     return ["Invalid Token"];
   }
   brandDiscountsList = await getDiscountByBrand(brand);
@@ -161,8 +163,8 @@ async function getDiscountByClient(client) {
   // Lógica para obtener los usuarios desde tu base de datos u origen de datos
   // Por ejemplo:
   // const usuarios = ...; // Obtener usuarios desde alguna fuente de datos
-  const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
-  const tabName = "Clientes";
+  const sheetId = process.env.SHEET_ID;
+  const tabName = process.env.TAB_NAME_CLIENTS;
   const range = "A:B";
   const googleSheetClient = await _getGoogleSheetClient();
 
@@ -181,8 +183,8 @@ async function getDiscountByBrand(brand) {
   // Lógica para obtener los usuarios desde tu base de datos u origen de datos
   // Por ejemplo:
   // const usuarios = ...; // Obtener usuarios desde alguna fuente de datos
-  const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
-  const tabName = "MarcasXDescuento";
+  const sheetId = process.env.SHEET_ID;
+  const tabName = process.env.TAB_NAME_BRAND_BY_DISCOUNT;
   const range = "A:B";
   const googleSheetClient = await _getGoogleSheetClient();
 
