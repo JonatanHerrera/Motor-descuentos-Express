@@ -1,9 +1,6 @@
 const { GoogleSpreadsheet } = require("google-spreadsheet");
 const { google } = require("googleapis");
 
-const sheetId = "1ATOy1PpPJ9ORH7ip-eWVkHqokLsQw3efyqLxdZqugTQ";
-const tabName = "Marcas";
-const range = "A:B";
 
 main().then(() => {
   console.log("Completed");
@@ -18,7 +15,7 @@ async function main() {
 
 async function _getGoogleSheetClient() {
   const auth = new google.auth.GoogleAuth({
-    keyFile: "./src/json/Credenciales.json",
+    keyFile: process.env.KEY_FILE_PATH,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 
@@ -36,25 +33,6 @@ async function _readGoogleSheet(googleSheetClient, sheetId, tabName, range) {
     return res.data.values;
   
   
-}
-
-async function _writeGoogleSheet(
-  googleSheetClient,
-  sheetId,
-  tabName,
-  range,
-  data
-) {
-  await googleSheetClient.spreadsheets.values.append({
-    spreadsheetId: sheetId,
-    range: `${tabName}!${range}`,
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    resource: {
-      majorDimension: "ROWS",
-      values: data,
-    },
-  });
 }
 
 module.exports = { _readGoogleSheet, _getGoogleSheetClient };
