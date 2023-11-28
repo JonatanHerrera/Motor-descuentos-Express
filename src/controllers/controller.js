@@ -7,7 +7,7 @@ let brandDiscountsList = [];
 let clientDiscountList = [];
 let activeBrand = "";
 
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
 async function validateSecureCredentials(
   googleSheetClient,
@@ -132,7 +132,7 @@ async function getDiscountByClientDocument(client, brand, token) {
   const googleSheetClient = await _getGoogleSheetClient();
   const decodedData = Buffer.from(token, "base64").toString("utf-8");
   if (decodedData !== process.env.AUTH_API) {
-        return ["Invalid Token"];
+    return ["Invalid Token"];
   }
   brandDiscountsList = await getDiscountByBrand(brand);
   clientDiscountList = await getDiscountByClient(client);
