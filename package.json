@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@google-cloud/bigquery": "^7.3.0",
     "@google-cloud/local-auth": "^2.1.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

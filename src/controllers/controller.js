@@ -2,12 +2,12 @@ const {
   _readGoogleSheet,
   _getGoogleSheetClient,
 } = require("../spreadsheets.js");
+const bcrypt = require("bcryptjs");
+const { BigQuery } = require("@google-cloud/bigquery");
 
 let brandDiscountsList = [];
 let clientDiscountList = [];
 let activeBrand = "";
-
-const bcrypt = require("bcryptjs");
 
 async function validateSecureCredentials(
   googleSheetClient,
@@ -100,9 +100,14 @@ async function getDiscounts(
 
     if (res && res.data && res.data.values && Array.isArray(res.data.values)) {
       const data = res.data.values;
-
+      let discounts;
       // Filtrar todas las filas que corresponden a la marca específica
-      const discounts = data.filter((row) => row[0] === filter);
+      if (filter) {
+        discounts = data.filter((row) => row[0] === filter);
+      } else {
+        discounts = data;
+      }
+
       if (discounts.length > 0) {
         // Estructurar los datos para devolver los descuentos encontrados
         const discountsData = discounts.map((discount) => {
@@ -126,6 +131,29 @@ async function getDiscounts(
   }
 }
 
+async function insertBigQuerryData(dataToInsert, datasetId, tableId) {
+  try {
+    // Crea una instancia de BigQuery
+    const keyFileName =  process.env.KEY_FILE_PATH
+    const bigquery = new BigQuery({ keyFilename: keyFileName});
+
+    // Obtiene una referencia al conjunto de datos y la tabla en BigQuery
+    const dataset = bigquery.dataset(datasetId);
+    const table = dataset.table(tableId);
+const data =    [
+  {Fecha_Consultaa: new Date(),Marca: 'Jane',Cliente: 'Tom',Descuento: 'Tom',Descripcion_Descuento	:'aaaa'}
+];
+    // Inserta los datos en la tabla
+    await bigquery.dataset(datasetId).table(tableId).insert(data);
+    console.log(`Inserted ${dataToInsert.length} rows`);
+
+    return "Datos insertados correctamente en BigQuery.";
+  } catch (error) {
+    console.error("Error al insertar datos en BigQuery:", error);
+    throw new Error("Error al insertar datos en BigQuery.");
+  }
+}
+
 async function getDiscountByClientDocument(client, brand, token) {
   const sheetId = process.env.SHEET_ID;
   const range = "A:B";
@@ -136,20 +164,39 @@ async function getDiscountByClientDocument(client, brand, token) {
   }
   brandDiscountsList = await getDiscountByBrand(brand);
   clientDiscountList = await getDiscountByClient(client);
+  discountsList = await getDiscountList();
   const validatedFilter = filterDiscounts(
     brandDiscountsList,
-    clientDiscountList
+    clientDiscountList,
+    discountsList
   );
+
+  const miDatasetId = "motor_descuentos_viva";
+  const miTableId = "motor_descuentos_logs";
+
+  await insertBigQuerryData(validatedFilter, miDatasetId, miTableId)
+    .then((resultado) => {
+      console.log(resultado);
+    })
+    .catch((error) => {
+      console.error(error.message);
+    });
   return validatedFilter;
 }
 
-function filterDiscounts(arr1, arr2) {
+function filterDiscounts(arr1, arr2, discountsList) {
   const result = [];
 
   for (const item1 of arr1) {
     for (const item2 of arr2) {
       if (item1.discount === item2.discount) {
-        result.push(item1.discount);
+        const discountListFiltered = discountsList.filter(
+          (row) => row.object === item1.discount
+        );
+
+        const descripcion = discountListFiltered[0].discount;
+        // Agregar el descuento y su descripción al resultado
+        result.push({ Descuento: item1.discount, Descripcion: descripcion });
       }
     }
   }
@@ -192,6 +239,26 @@ async function getDiscountByBrand(brand) {
     tabName,
     range,
     brand
+  );
+
+  return discountsList;
+}
+
+async function getDiscountList() {
+  // Lógica para obtener los usuarios desde tu base de datos u origen de datos
+  // Por ejemplo:
+  // const usuarios = ...; // Obtener usuarios desde alguna fuente de datos
+  const sheetId = process.env.SHEET_ID;
+  const tabName = process.env.TAB_NAME_DISCOUNTS;
+  const range = "A:B";
+  const googleSheetClient = await _getGoogleSheetClient();
+
+  let discountsList = await getDiscounts(
+    googleSheetClient,
+    sheetId,
+    tabName,
+    range,
+    ""
   );
 
   return discountsList;
