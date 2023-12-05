@@ -3,7 +3,7 @@ const {
   _getGoogleSheetClient,
 } = require("../spreadsheets.js");
 const bcrypt = require("bcryptjs");
-const { BigQuery } = require("@google-cloud/bigquery");
+const { BigQuery, BigQueryDatetime } = require("@google-cloud/bigquery");
 
 let brandDiscountsList = [];
 let clientDiscountList = [];
@@ -131,33 +131,32 @@ async function getDiscounts(
   }
 }
 
-async function insertBigQuerryData(dataToInsert, datasetId, tableId) {
+async function insertBigQuerryData(
+  dataToInsert,
+  client,
+  brand,
+  datasetId,
+  tableId
+) {
   try {
-    // Crea una instancia de BigQuery
-    const keyFileName =  process.env.KEY_FILE_PATH
-    const bigquery = new BigQuery({ keyFilename: keyFileName});
+    const keyFileName = process.env.KEY_FILE_PATH;
+    const bigquery = new BigQuery({ keyFilename: keyFileName });
+    const data = dataToInsert;
 
-    // Obtiene una referencia al conjunto de datos y la tabla en BigQuery
-    const dataset = bigquery.dataset(datasetId);
-    const table = dataset.table(tableId);
-const data =    [
-  {Fecha_Consultaa: new Date(),Marca: 'Jane',Cliente: 'Tom',Descuento: 'Tom',Descripcion_Descuento	:'aaaa'}
-];
+    data.forEach((descuento) => {
+      descuento.Fecha_Consulta = new Date().toISOString();
+      descuento.Cliente = client;
+      descuento.Marca = brand;
+    });
     // Inserta los datos en la tabla
     await bigquery.dataset(datasetId).table(tableId).insert(data);
-    console.log(`Inserted ${dataToInsert.length} rows`);
-
-    return "Datos insertados correctamente en BigQuery.";
-  } catch (error) {
-    console.error("Error al insertar datos en BigQuery:", error);
-    throw new Error("Error al insertar datos en BigQuery.");
+    return (`Inserted ${data.length} rows`);  
+  } catch (error) {    
+    console.error("Error al insertar datos en BigQuery:", error);    
   }
 }
 
 async function getDiscountByClientDocument(client, brand, token) {
-  const sheetId = process.env.SHEET_ID;
-  const range = "A:B";
-  const googleSheetClient = await _getGoogleSheetClient();
   const decodedData = Buffer.from(token, "base64").toString("utf-8");
   if (decodedData !== process.env.AUTH_API) {
     return ["Invalid Token"];
@@ -171,16 +170,22 @@ async function getDiscountByClientDocument(client, brand, token) {
     discountsList
   );
 
-  const miDatasetId = "motor_descuentos_viva";
-  const miTableId = "motor_descuentos_logs";
+  const miDatasetId = process.env.BQ_DATASET;
+  const miTableId = process.env.BQ_TABLEDISCOUNTLOGS;
 
-  await insertBigQuerryData(validatedFilter, miDatasetId, miTableId)
-    .then((resultado) => {
+  await insertBigQuerryData(
+    validatedFilter,
+    client,
+    brand,
+    miDatasetId,
+    miTableId
+  )
+    .then((resultado) => {      
       console.log(resultado);
     })
-    .catch((error) => {
+    .catch((error) => {      
       console.error(error.message);
-    });
+    });   
   return validatedFilter;
 }
 
@@ -196,7 +201,10 @@ function filterDiscounts(arr1, arr2, discountsList) {
 
         const descripcion = discountListFiltered[0].discount;
         // Agregar el descuento y su descripción al resultado
-        result.push({ Descuento: item1.discount, Descripcion: descripcion });
+        result.push({
+          Descuento: item1.discount,
+          Descripcion_Descuento: descripcion,
+        });
       }
     }
   }
