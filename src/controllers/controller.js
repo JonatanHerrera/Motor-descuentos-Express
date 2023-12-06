@@ -149,6 +149,7 @@ async function insertBigQuerryData(
       descuento.Marca = brand;
     });
     // Inserta los datos en la tabla
+    if(data.length === 0){return }
     await bigquery.dataset(datasetId).table(tableId).insert(data);
     return (`Inserted ${data.length} rows`);  
   } catch (error) {    
