@@ -1,87 +1,79 @@
-const {
-  _readGoogleSheet,
-  _getGoogleSheetClient,
-} = require("../spreadsheets.js");
-const bcrypt = require("bcryptjs");
-const { BigQuery, BigQueryDatetime } = require("@google-cloud/bigquery");
+const { _getGoogleSheetClient } = require("../spreadsheets.js");
+const { BigQuery } = require("@google-cloud/bigquery");
+const jwt = require("jsonwebtoken");
+const {} = require("../app.js");
 
 let brandDiscountsList = [];
 let clientDiscountList = [];
-let activeBrand = "";
 
-async function validateSecureCredentials(
-  googleSheetClient,
-  sheetId,
-  tabName,
-  range,
-  marca,
-  password
-) {
-  const res = await googleSheetClient.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${tabName}!${range}`,
-  });
-
-  if (res && res.data && res.data.values && Array.isArray(res.data.values)) {
-    const data = res.data.values;
-
-    // Buscar la marca en los datos obtenidos
-    const found = data.find((row) => row[0] === marca);
-
-    if (found) {
-      // Obtener el hash de la contraseña almacenada
-      const hashedPassword = found[1]; // Suponiendo que la contraseña está en la segunda columna
-      const token = found[2];
-
-      // Comparar la contraseña proporcionada con el hash almacenado de manera segura
-      const match = await bcrypt.compare(password, hashedPassword);
-      if (match) {
-        return token;
-      }
-    } else {
-      return ""; // La marca no fue encontrada
-    }
-  } else {
-    console.log("No se encontraron datos válidos en la hoja de Google Sheets");
-    return false;
-  }
-}
-
-async function Login(marca, password) {
-  // Lógica para obtener las marcas desde tu base de datos u origen de datos
-  // Por ejemplo:
-  // const marcas = ...; // Obtener marcas desde alguna fuente de datos
+async function Login(username, password) {
   const sheetId = process.env.SHEET_ID;
   const tabName = process.env.TAB_NAME_BRAND;
   const range = "A:C";
   const googleSheetClient = await _getGoogleSheetClient();
 
-  const isSecureCredentialsValid = await validateSecureCredentials(
+  const loginData = await getTableValues(
     googleSheetClient,
     sheetId,
     tabName,
-    range,
-    marca,
+    range
+  );
+
+  const isSecureCredentialsValid = await validateSecureCredentials(
+    loginData,
+    username,
     password
   );
 
-  if (isSecureCredentialsValid) {
-    activeBrand = marca;
-    return {
-      marca: activeBrand,
-      status: "Log In",
-      token: isSecureCredentialsValid,
-      result: true,
-    };
+  return isSecureCredentialsValid;
+}
+async function validateSecureCredentials(data, username, password) {
+  const found = data.find((row) => row[0] === username && row[1] === password);
+  let match = false;
+  if (found) {
+    const hashedPassword = found[1];
+    const mall = found[2];
+    const token = jwt.sign(
+      { name: username },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: 60 * 60 }
+    );
+    if (hashedPassword === password) {
+      match = true;
+    }
+    if (match) {
+      return {
+        brand: username,
+        mall: mall,
+        status: "Log In",
+        token: token,
+        result: true,
+      };
+    }
   } else {
-    activeBrand = "";
     return {
-      marca: activeBrand,
+      marca: "",
+      mall: "",
       status: "Error",
       token: "",
       result: false,
     };
-    // Realizar acciones cuando las credenciales son inválidas
+  }
+}
+
+async function getTableValues(googleSheetClient, sheetId, tabName, range) {
+  try {
+    const res = await googleSheetClient.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `${tabName}!${range}`,
+    });
+
+    if (res && res.data && res.data.values && Array.isArray(res.data.values)) {
+      const data = res.data.values;
+      return data;
+    }
+  } catch {
+    return [];
   }
 }
 
@@ -149,22 +141,35 @@ async function insertBigQuerryData(
       descuento.Marca = brand;
     });
     // Inserta los datos en la tabla
-    if(data.length === 0){return }
+    if (data.length === 0) {
+      return;
+    }
     await bigquery.dataset(datasetId).table(tableId).insert(data);
-    return (`Inserted ${data.length} rows`);  
-  } catch (error) {    
-    console.error("Error al insertar datos en BigQuery:", error);    
+    return `Inserted ${data.length} rows`;
+  } catch (error) {
+    console.error("Error al insertar datos en BigQuery:", error);
   }
 }
 
-async function getDiscountByClientDocument(client, brand, token) {
-  const decodedData = Buffer.from(token, "base64").toString("utf-8");
-  if (decodedData !== process.env.AUTH_API) {
-    return ["Invalid Token"];
+async function getDiscountByClientDocument(client, brand, mall, token) {
+  const isValidToken = await validateJWT(token);
+  if (!isValidToken) {
+    return {
+      status: "Invalid Token",
+      result: false,
+    };
   }
-  brandDiscountsList = await getDiscountByBrand(brand);
-  clientDiscountList = await getDiscountByClient(client);
-  discountsList = await getDiscountList();
+
+  brandDiscountsList = await getDiscountByBrand(brand,mall,token);
+  clientDiscountList = await getDiscountByClient(client, mall,token);
+  discountsList = await getDiscountList(mall);
+
+  console.log("marca",brandDiscountsList);
+  console.log("cliente",clientDiscountList);
+  console.log("descuentos",discountsList);
+  
+
+  /*
   const validatedFilter = filterDiscounts(
     brandDiscountsList,
     clientDiscountList,
@@ -181,13 +186,13 @@ async function getDiscountByClientDocument(client, brand, token) {
     miDatasetId,
     miTableId
   )
-    .then((resultado) => {      
+    .then((resultado) => {
       console.log(resultado);
     })
-    .catch((error) => {      
+    .catch((error) => {
       console.error(error.message);
-    });   
-  return validatedFilter;
+    });*/
+  return discountsList;
 }
 
 function filterDiscounts(arr1, arr2, discountsList) {
@@ -213,74 +218,109 @@ function filterDiscounts(arr1, arr2, discountsList) {
   return result;
 }
 
-async function getDiscountByClient(client) {
-  // Lógica para obtener los usuarios desde tu base de datos u origen de datos
-  // Por ejemplo:
-  // const usuarios = ...; // Obtener usuarios desde alguna fuente de datos
+async function validateJWT(token) {
+  const validation = jwt.verify(
+    token,
+    process.env.ACCESS_TOKEN_SECRET,
+    (err, decoded) => {
+      if (err) {
+        console.log("Error al verificar el token:", err.message);
+        return false;
+      } else {
+        return true;
+      }
+    }
+  );
+  return validation;
+}
+
+async function getDiscountByClient(client, mall, token) {
+  const isValidToken = await validateJWT(token);
+
+  if (!isValidToken) {
+    return {
+      status: "Invalid Token",
+      result: false,
+    };
+  }
+
   const sheetId = process.env.SHEET_ID;
   const tabName = process.env.TAB_NAME_CLIENTS;
-  const range = "A:B";
+  const range = "A:C";
   const googleSheetClient = await _getGoogleSheetClient();
 
-  let discountsList = await getDiscounts(
+  let discountsList = await getTableValues(
     googleSheetClient,
     sheetId,
     tabName,
-    range,
-    client
+    range
   );
 
-  return discountsList;
+  const FilterList = discountsList.filter(
+    (row) => row[0] === client && row[2] === mall
+  );
+
+  return FilterList;
 }
 
-async function getDiscountByBrand(brand) {
-  // Lógica para obtener los usuarios desde tu base de datos u origen de datos
-  // Por ejemplo:
-  // const usuarios = ...; // Obtener usuarios desde alguna fuente de datos
+async function getDiscountByBrand(brand, mall, token) {
+  const isValidToken = await validateJWT(token);
+
+  if (!isValidToken) {
+    return {
+      status: "Invalid Token",
+      result: false,
+    };
+  }
+
   const sheetId = process.env.SHEET_ID;
   const tabName = process.env.TAB_NAME_BRAND_BY_DISCOUNT;
-  const range = "A:B";
+  const range = "A:C";
   const googleSheetClient = await _getGoogleSheetClient();
 
-  let discountsList = await getDiscounts(
+  let discountsList = await getTableValues(
     googleSheetClient,
     sheetId,
     tabName,
-    range,
-    brand
+    range
+  );
+  const FilterList = discountsList.filter(
+    (row) => row[0] === brand && row[2] === mall
   );
 
-  return discountsList;
+  return FilterList;
 }
 
-async function getDiscountList() {
-  // Lógica para obtener los usuarios desde tu base de datos u origen de datos
-  // Por ejemplo:
-  // const usuarios = ...; // Obtener usuarios desde alguna fuente de datos
+async function getDiscountList(mall) {
   const sheetId = process.env.SHEET_ID;
   const tabName = process.env.TAB_NAME_DISCOUNTS;
-  const range = "A:B";
+  const range = "A:F";
   const googleSheetClient = await _getGoogleSheetClient();
 
-  let discountsList = await getDiscounts(
+  let discountsList = await getTableValues(
     googleSheetClient,
     sheetId,
     tabName,
-    range,
-    ""
+    range
   );
+  const currentDatetime = new Date().setHours(-5, 0, 0, 0);
+  const currentDate = new Date(currentDatetime);
 
-  return discountsList;
-}
+  const FilterList = discountsList.filter((row) => row[5] === mall);
 
-function getActiveBrand(req, res) {
-  res.json(activeBrand);
+  const currentDiscounts = FilterList.filter((discount) => {
+    const startDate = new Date(discount[3]);
+    const endDate = new Date(discount[4]);
+
+    return currentDate >= startDate && currentDate <= endDate;
+  });
+
+  return currentDiscounts;
 }
 
 module.exports = {
   Login,
   getDiscountByBrand,
-  getActiveBrand,
   getDiscountByClientDocument,
   getDiscountByClient,
 };

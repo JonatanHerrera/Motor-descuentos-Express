@@ -1,34 +1,27 @@
-if(process.env.NODE_ENV !== 'production')
-{
-  require('dotenv').config();
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
 }
 
-var express = require("express"); //llamamos a Express
-const cors = require('cors');
+var express = require("express");
+const cors = require("cors");
 var app = express();
 
-
 const corsOptions = {
-  origin: '*',
-  optionsSuccessStatus: 200 // some legacy browsers (IE11, various SmartTVs) choke on 204
+  origin: "*",
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 
-
 const {
   Login,
   getDiscountByBrand,
-  getActiveBrand,
   getDiscountByClientDocument,
   getDiscountByClient,
 } = require("./controllers/controller.js");
 const { get } = require("express/lib/request.js");
 
-// Ruta para obtener marcas
 app.use(express.json());
-
-// middlewre
 
 app.use((req, res, next) => {
   if (!req.get("Authorization")) {
@@ -56,35 +49,33 @@ app.use((req, res, next) => {
 });
 
 app.post("/login", async (req, res) => {
-  const { marca, password } = req.body;
-  const result = await Login(marca, password);
-  // Envías la respuesta de vuelta al cliente (Postman)
+  const { username, password } = req.body;
+  const result = await Login(username, password);
+
   res.json(result);
 });
 
 app.post("/discountsByBrand", async (req, res) => {
-  const { brand } = req.body;
-  const result = await getDiscountByBrand(brand);
-  // Envías la respuesta de vuelta al cliente (Postman)
+  const { brand, mall  } = req.body;
+  const token = req.headers["token"];
+  const result = await getDiscountByBrand(brand, mall ,token);
+
   res.json(result);
 });
 app.post("/discountsByClientDocument", async (req, res) => {
-  const { client, brand,  token } = req.body; 
-  
-  const result = await getDiscountByClientDocument(client,brand,token);
-  // Envías la respuesta de vuelta al cliente (Postman)
+  const { client, brand , mall } = req.body;
+  const token = req.headers["token"];
+  const result = await getDiscountByClientDocument(client, brand,mall,token);
+
   res.json(result);
 });
 
 app.post("/discountsByClient", async (req, res) => {
-  const { client } = req.body;
-  const result = await getDiscountByClient(client);
-  // Envías la respuesta de vuelta al cliente (Postman)
+  const { client, mall } = req.body;
+  const token = req.headers["token"];
+  const result = await getDiscountByClient(client, mall, token);
+
   res.json(result);
 });
-// Ruta para obtener usuarios
 
-app.get("/getActiveBrand", getActiveBrand);
-//routes/
-app.use(require("./routes/google.routes"));
 module.exports = app;
