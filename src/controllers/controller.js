@@ -125,10 +125,7 @@ async function getDiscountByClientDocument(client, brand, mall, token) {
   };
   brandDiscountsList = await getDiscountByBrand(brand, mall, token);
   clientDiscountList = await getDiscountByClient(client, mall, token);
-  discountsList = await getDiscountList(mall);
-  console.log("marca", brandDiscountsList);
-  console.log("cliente", clientDiscountList);
-  console.log("descuentos", discountsList);
+  discountsList = await getDiscountList(mall);  
   const notEmpty = (arr) => Array.isArray(arr) && arr.length > 0;
 
   const allListHasValues = [
