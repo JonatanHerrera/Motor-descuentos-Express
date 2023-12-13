@@ -36,7 +36,7 @@ async function validateSecureCredentials(data, username, password) {
     const token = jwt.sign(
       { name: username },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: 60 * 60 }
+      { expiresIn: 60 * 60}
     );
     if (hashedPassword === password) {
       match = true;
@@ -77,56 +77,12 @@ async function getTableValues(googleSheetClient, sheetId, tabName, range) {
   }
 }
 
-async function getDiscounts(
-  googleSheetClient,
-  sheetId,
-  tabName,
-  range,
-  filter
-) {
-  try {
-    const res = await googleSheetClient.spreadsheets.values.get({
-      spreadsheetId: sheetId,
-      range: `${tabName}!${range}`,
-    });
-
-    if (res && res.data && res.data.values && Array.isArray(res.data.values)) {
-      const data = res.data.values;
-      let discounts;
-      // Filtrar todas las filas que corresponden a la marca específica
-      if (filter) {
-        discounts = data.filter((row) => row[0] === filter);
-      } else {
-        discounts = data;
-      }
-
-      if (discounts.length > 0) {
-        // Estructurar los datos para devolver los descuentos encontrados
-        const discountsData = discounts.map((discount) => {
-          return {
-            object: discount[0], // Suponiendo que la columna 1 es la marca
-            discount: discount[1], // Suponiendo que la columna 2 es el descuento
-            // Puedes agregar más propiedades según las columnas de tu hoja de Google Sheets
-          };
-        });
-
-        return discountsData;
-      } else {
-        return []; // No se encontraron descuentos para la marca especificada
-      }
-    } else {
-      return null; // La estructura de los datos es incorrecta o no se encontraron datos
-    }
-  } catch (error) {
-    console.error("Error al obtener los descuentos:", error);
-    return null; // Error al obtener los datos
-  }
-}
 
 async function insertBigQuerryData(
   dataToInsert,
   client,
   brand,
+  mall,
   datasetId,
   tableId
 ) {
@@ -135,12 +91,12 @@ async function insertBigQuerryData(
     const bigquery = new BigQuery({ keyFilename: keyFileName });
     const data = dataToInsert;
 
-    data.forEach((descuento) => {
-      descuento.Fecha_Consulta = new Date().toISOString();
-      descuento.Cliente = client;
-      descuento.Marca = brand;
+    data.forEach((discount) => {
+      discount.Fecha_Consulta = new Date().toISOString();
+      discount.Cliente = client;
+      discount.Marca = brand;
     });
-    // Inserta los datos en la tabla
+
     if (data.length === 0) {
       return;
     }
@@ -159,30 +115,59 @@ async function getDiscountByClientDocument(client, brand, mall, token) {
       result: false,
     };
   }
-
-  brandDiscountsList = await getDiscountByBrand(brand,mall,token);
-  clientDiscountList = await getDiscountByClient(client, mall,token);
+  const emptyDiscount = {
+    name: "No hay descuentos aplicables",
+    percentage: "-",
+    description: "Es cliente no aplica para ningun descuento vigente",
+    startDate: "",
+    endDate: "",
+    mall: "",
+  };
+  brandDiscountsList = await getDiscountByBrand(brand, mall, token);
+  clientDiscountList = await getDiscountByClient(client, mall, token);
   discountsList = await getDiscountList(mall);
+  console.log("marca", brandDiscountsList);
+  console.log("cliente", clientDiscountList);
+  console.log("descuentos", discountsList);
+  const notEmpty = (arr) => Array.isArray(arr) && arr.length > 0;
 
-  console.log("marca",brandDiscountsList);
-  console.log("cliente",clientDiscountList);
-  console.log("descuentos",discountsList);
-  
-
-  /*
-  const validatedFilter = filterDiscounts(
+  const allListHasValues = [
     brandDiscountsList,
     clientDiscountList,
-    discountsList
-  );
+    discountsList,
+  ].every(notEmpty);
 
-  const miDatasetId = process.env.BQ_DATASET;
-  const miTableId = process.env.BQ_TABLEDISCOUNTLOGS;
+  if (allListHasValues) {
+    const clientDiscontFilter = clientDiscountList
+      .filter((user) => user[0] === client)
+      .map((user) => user[1]);
+    const filteredDiscounts = discountsList.filter(
+      (discount) =>
+        clientDiscontFilter.includes(discount[0]) &&
+        brandDiscountsList.some((brandDiscount) =>
+          brandDiscount.includes(discount[0])
+        )
+    );
+    if (filteredDiscounts.length > 0) {
+      const discountsArray = filteredDiscounts.map((arr) => {
+        return {
+          name: arr[0],
+          percentage: arr[1],
+          description: arr[2],
+          startDate: arr[3],
+          endDate: arr[4],
+          mall: arr[5],
+        };
+      });
 
+      const miDatasetId = process.env.BQ_DATASET;
+      const miTableId = process.env.BQ_TABLEDISCOUNTLOGS;
+      /*
   await insertBigQuerryData(
-    validatedFilter,
+    filteredDiscounts,
     client,
     brand,
+    mall,
     miDatasetId,
     miTableId
   )
@@ -191,31 +176,14 @@ async function getDiscountByClientDocument(client, brand, mall, token) {
     })
     .catch((error) => {
       console.error(error.message);
-    });*/
-  return discountsList;
-}
+    }); */
 
-function filterDiscounts(arr1, arr2, discountsList) {
-  const result = [];
-
-  for (const item1 of arr1) {
-    for (const item2 of arr2) {
-      if (item1.discount === item2.discount) {
-        const discountListFiltered = discountsList.filter(
-          (row) => row.object === item1.discount
-        );
-
-        const descripcion = discountListFiltered[0].discount;
-        // Agregar el descuento y su descripción al resultado
-        result.push({
-          Descuento: item1.discount,
-          Descripcion_Descuento: descripcion,
-        });
-      }
+      return discountsArray;
     }
+    return [emptyDiscount];
+  } else {
+    return [emptyDiscount];
   }
-
-  return result;
 }
 
 async function validateJWT(token) {
