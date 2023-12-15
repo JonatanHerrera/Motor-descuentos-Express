@@ -3,9 +3,6 @@ const { BigQuery } = require("@google-cloud/bigquery");
 const jwt = require("jsonwebtoken");
 const {} = require("../app.js");
 
-let brandDiscountsList = [];
-let clientDiscountList = [];
-
 async function Login(username, password) {
   const sheetId = process.env.SHEET_ID;
   const tabName = process.env.TAB_NAME_BRAND;
@@ -36,7 +33,7 @@ async function validateSecureCredentials(data, username, password) {
     const token = jwt.sign(
       { name: username },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: 60 * 60}
+      { expiresIn: 60 * 60 * 4 }
     );
     if (hashedPassword === password) {
       match = true;
@@ -77,7 +74,6 @@ async function getTableValues(googleSheetClient, sheetId, tabName, range) {
   }
 }
 
-
 async function insertBigQuerryData(
   dataToInsert,
   client,
@@ -92,9 +88,9 @@ async function insertBigQuerryData(
     const data = dataToInsert;
 
     data.forEach((discount) => {
-      discount.Fecha_Consulta = new Date().toISOString();
-      discount.Cliente = client;
-      discount.Marca = brand;
+      discount.date = new Date().toISOString();
+      discount.client = client;
+      discount.brand = brand;
     });
 
     if (data.length === 0) {
@@ -125,7 +121,7 @@ async function getDiscountByClientDocument(client, brand, mall, token) {
   };
   brandDiscountsList = await getDiscountByBrand(brand, mall, token);
   clientDiscountList = await getDiscountByClient(client, mall, token);
-  discountsList = await getDiscountList(mall);  
+  discountsList = await getDiscountList(mall);
   const notEmpty = (arr) => Array.isArray(arr) && arr.length > 0;
 
   const allListHasValues = [
@@ -159,21 +155,21 @@ async function getDiscountByClientDocument(client, brand, mall, token) {
 
       const miDatasetId = process.env.BQ_DATASET;
       const miTableId = process.env.BQ_TABLEDISCOUNTLOGS;
-      /*
-  await insertBigQuerryData(
-    filteredDiscounts,
-    client,
-    brand,
-    mall,
-    miDatasetId,
-    miTableId
-  )
-    .then((resultado) => {
-      console.log(resultado);
-    })
-    .catch((error) => {
-      console.error(error.message);
-    }); */
+
+      await insertBigQuerryData(
+        discountsArray,
+        client,
+        brand,
+        mall,
+        miDatasetId,
+        miTableId
+      )
+        .then((resultado) => {
+          console.log(resultado);
+        })
+        .catch((error) => {
+          console.error(error.message);
+        });
 
       return discountsArray;
     }
